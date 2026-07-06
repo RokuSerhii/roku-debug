@@ -2138,12 +2138,17 @@ describe('BrightScriptDebugSession', () => {
     describe('deleteAllComponentLibraries', () => {
         /**
          * Simulate a device that has `installed` component libraries, where `dependencies[x]` lists the complibs
-         * that `x` depends on (references). Deleting a complib that another STILL-installed complib depends on fails
-         * with a device compile error - mirroring real Roku behavior - so the code must delete dependents first.
+         * that `x` depends on (references). Deleting a complib that another STILL-installed complib depends on
+         * produces a device compile error - mirroring real Roku behavior.
+         *
+         * By default a blocked delete does NOT remove the complib (it must be retried after its dependents are gone).
+         * If `deletesDespiteError` is true, a blocked delete instead rejects with a compile error that ALSO carries a
+         * `Delete Succeeded` message and removes the complib - mirroring the real device behavior where deleting a
+         * still-referenced complib both errors and succeeds.
          *
          * Stubs the device calls against this fake state and returns the recorded delete order.
          */
-        function stubDevice(installed: string[], dependencies: Record<string, string[]> = {}) {
+        function stubDevice(installed: string[], dependencies: Record<string, string[]> = {}, options: { deletesDespiteError?: boolean } = {}) {
             const present = new Set(installed);
             const deleteOrder: string[] = [];
 
@@ -2159,12 +2164,24 @@ describe('BrightScriptDebugSession', () => {
                 [...present].map(archiveFileName => ({ appType: 'dcl', archiveFileName }))
             ));
 
-            sinon.stub(rokuDeploy, 'deleteComponentLibrary').callsFake((options: any) => {
-                const target = options.fileName;
-                //if any other still-installed complib depends on `target`, the device rejects with a compile error
+            sinon.stub(rokuDeploy, 'deleteComponentLibrary').callsFake((deleteOptions: any) => {
+                const target = deleteOptions.fileName;
+                //is any other still-installed complib depending on `target`?
                 const blockedBy = [...present].find(other => other !== target && (dependencies[other] ?? []).includes(target));
                 if (blockedBy) {
-                    return Promise.reject(new Error(`Install Failure: Compilation Failed. (compile error &hb9) ... '${target}'`));
+                    const error: any = new Error(`Install Failure: Compilation Failed. (compile error &hb9) ... '${target}'`);
+                    //the device reports parsed messages on `.results`; a delete that succeeds-despite-error includes 'Delete Succeeded'
+                    error.results = {
+                        errors: [`Install Failure: Compilation Failed. (compile error &hb9) ... '${target}'`],
+                        infos: [],
+                        successes: options.deletesDespiteError ? ['Delete Succeeded'] : []
+                    };
+                    //when the device deletes it anyway, remove it from the installed set even though it errored
+                    if (options.deletesDespiteError) {
+                        deleteOrder.push(target);
+                        present.delete(target);
+                    }
+                    return Promise.reject(error);
                 }
                 deleteOrder.push(target);
                 present.delete(target);
@@ -2218,6 +2235,45 @@ describe('BrightScriptDebugSession', () => {
 
             expect(deleteOrder).to.eql(['LibAlpha.zip', 'LibBeta.zip', 'LibCharlie.zip']);
             expect(present.size).to.equal(0);
+        });
+
+        it('treats a delete that reports a compile error BUT "Delete Succeeded" as done (does not retry it)', async () => {
+            //the device deletes each complib even though deleting a still-referenced one also reports a compile error
+            configureComplibs(['LibCharlie.zip', 'LibBeta.zip', 'LibAlpha.zip']);
+            const { deleteOrder, present } = stubDevice(
+                ['LibAlpha.zip', 'LibBeta.zip', 'LibCharlie.zip'],
+                { 'LibAlpha.zip': ['LibBeta.zip', 'LibCharlie.zip'], 'LibBeta.zip': ['LibCharlie.zip'] },
+                { deletesDespiteError: true }
+            );
+            const deleteSpy = rokuDeploy.deleteComponentLibrary as SinonStub;
+
+            await session['deleteAllComponentLibraries']();
+
+            //every complib is gone, and each was deleted exactly once - the compile errors were NOT treated as failures to retry
+            expect(present.size).to.equal(0);
+            expect(deleteOrder).to.eql(['LibAlpha.zip', 'LibBeta.zip', 'LibCharlie.zip']);
+            expect(deleteSpy.callCount).to.equal(3);
+        });
+
+        it('retries a delete that reports a compile error and NO success message (delete did not happen)', async () => {
+            //unconfigured orphans (no known delete order): dep is depended-on by other. With no priority, the code may
+            //try to delete `dep` first - that's blocked and errors WITHOUT a success message, so it must NOT be counted
+            //as deleted and must be retried after `other` (its dependent) is gone.
+            configureComplibs([]);
+            const { deleteOrder, present } = stubDevice(
+                ['dep.zip', 'other.zip'],
+                { 'other.zip': ['dep.zip'] }
+                //deletesDespiteError defaults to false → a blocked delete errors and does NOT remove the complib
+            );
+            const deleteSpy = rokuDeploy.deleteComponentLibrary as SinonStub;
+
+            await session['deleteAllComponentLibraries']();
+
+            //everything is eventually deleted, and `other` (the dependent) comes out before `dep`
+            expect(present.size).to.equal(0);
+            expect(deleteOrder).to.eql(['other.zip', 'dep.zip']);
+            //`dep` was attempted while still blocked (and not removed), so there were more than 2 total delete calls
+            expect(deleteSpy.callCount).to.be.greaterThan(2);
         });
 
         it('deletes unconfigured (orphan) libraries too, using compile-error tolerance for their order', async () => {

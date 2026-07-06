@@ -656,6 +656,21 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
             this.sendLaunchProgress('update', 'Connecting to debug server');
             const connectAdapterEnd = this.logger.timeStart('log', 'Connect adapter');
             this.createRokuAdapter(this.rendezvousTracker);
+
+            //if we have at least one installable complib, delete the dev app and any complibs
+            //this is because manipulating complibs causes autolaunch (which often fails with compile errors)
+            //so we want to do this BEFORE connecting to the adapter to avoid autolaunch and those compile errors
+            if (this.launchConfiguration.componentLibraries?.some(x => x.install)) {
+                this.sendLaunchProgress('update', 'Removing existing dev app and component libraries');
+                this.logger.log('Deleting any installed channel on the device to ensure a clean slate for component library installation');
+                await rokuDeploy.deleteInstalledChannel({
+                    host: this.launchConfiguration.host,
+                    password: this.launchConfiguration.password
+                });
+                this.logger.log('Deleting any installed component libraries on the device to ensure a clean slate for component library installation');
+                await this.deleteAllComponentLibraries();
+            }
+
             await this.connectRokuAdapter();
             connectAdapterEnd();
 
@@ -1636,12 +1651,19 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
                 if (!this.isComponentLibraryDependencyCompileError(error)) {
                     throw error;
                 }
-                //another not-yet-deleted complib still depends on this one. Give up on it once it's out of attempts;
-                //otherwise leave it pending so we retry after its dependents are gone.
-                if (attempts.get(fileName) >= maxAttempts) {
-                    failed.add(fileName);
+                //Deleting a complib that a dependent still references produces a compile error - but the delete may
+                //STILL have succeeded (the device reports both a compile error and 'Delete Succeeded'). If it actually
+                //deleted, treat it as done. Only if it did NOT succeed do we defer and retry it later.
+                if (this.wasComponentLibraryDeleteSuccessful(error)) {
+                    this.logger.trace(`Deleted '${fileName}' (device reported a compile error but the delete succeeded)`);
+                } else {
+                    //another not-yet-deleted complib still depends on this one. Give up on it once it's out of
+                    //attempts; otherwise leave it pending so we retry after its dependents are gone.
+                    if (attempts.get(fileName) >= maxAttempts) {
+                        failed.add(fileName);
+                    }
+                    this.logger.log(`Deferring delete of '${fileName}'; another component library still depends on it`);
                 }
-                this.logger.log(`Deferring delete of '${fileName}'; another component library still depends on it`);
             }
 
             //the Roku doesn't appreciate back-to-back deletes; give it a moment between requests
@@ -1656,6 +1678,18 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
     private isComponentLibraryDependencyCompileError(error: any): boolean {
         const message = `${error?.message ?? ''}`;
         return /compile error|compilation failed/i.test(message);
+    }
+
+    /**
+     * Did the component-library delete actually succeed, even though the device also reported a compile error?
+     * When we delete a complib that a dependent still references, the device reports BOTH a compile error AND a
+     * `Delete Succeeded` message - meaning the complib really was removed. roku-deploy attaches the parsed device
+     * messages (`{ errors, infos, successes }`) to the thrown error as `.results`; we look for the success there.
+     * Absence of that success message means the delete did NOT happen, so it should be treated as a failure/retry.
+     */
+    private wasComponentLibraryDeleteSuccessful(error: any): boolean {
+        const successes: string[] = error?.results?.successes ?? [];
+        return successes.some(message => /delete succeeded/i.test(message));
     }
 
     protected sourceRequest(response: DebugProtocol.SourceResponse, args: DebugProtocol.SourceArguments) {
