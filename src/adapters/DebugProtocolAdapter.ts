@@ -75,7 +75,6 @@ export class DebugProtocolAdapter {
 
     private compileClient: Socket;
     private compileErrorProcessor: CompileErrorProcessor;
-
     private emitter: EventEmitter;
     private chanperfTracker: ChanperfTracker;
     private client: DebugProtocolClient;

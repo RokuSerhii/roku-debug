@@ -657,9 +657,8 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
             const connectAdapterEnd = this.logger.timeStart('log', 'Connect adapter');
             this.createRokuAdapter(this.rendezvousTracker);
 
-            //if we have at least one installable complib, delete the dev app and any complibs
-            //this is because manipulating complibs causes autolaunch (which often fails with compile errors)
-            //so we want to do this BEFORE connecting to the adapter to avoid autolaunch and those compile errors
+            // Manipulating complibs on-device autolaunches the dev app and often triggers compile errors,
+            // so if we have at least one installable complib, delete the dev app and any complibs to avoid all that.
             if (this.launchConfiguration.componentLibraries?.some(x => x.install)) {
                 this.sendLaunchProgress('update', 'Removing existing dev app and component libraries');
                 this.logger.log('Deleting any installed channel on the device to ensure a clean slate for component library installation');
@@ -796,7 +795,7 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
 
             //all setBreakpoints requests have arrived by this point (configurationDone is the DAP signal
             //that the client has finished sending configuration). Inject the STOPs and postfix each project's
-            //own files now (still no zips — those are sealed after cross-project references are rewritten).
+            //own files now (still no zips. those are sealed after cross-project references are rewritten).
             await Promise.all([
                 this.writeMainProjectBreakpoints(),
                 this.writeAndPostfixComponentLibraries(this.launchConfiguration.componentLibraries)
@@ -806,10 +805,10 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
             //references to point at the postfixed file names. Must run before any project zip is sealed.
             await this.projectManager.applyLibraryReferencePostfixes();
 
-            //references are fixed — seal the main project zip and the complib zips (then install + host)
+            //now zip the main project, also zip and upload installable complibs, and start the webserver for non-installed complibs.
             await Promise.all([
                 this.zipMainProject(),
-                this.zipAndHostComponentLibraries(this.launchConfiguration.componentLibraries, this.launchConfiguration.componentLibrariesPort)
+                this.zipServeAndInstallComponentLibraries(this.launchConfiguration.componentLibraries, this.launchConfiguration.componentLibrariesPort)
             ]);
 
             this.sendLaunchProgress('update', 'Uploading to Roku');
@@ -1489,7 +1488,7 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
      * hosting. Must run AFTER `applyLibraryReferencePostfixes` so each zip contains the rewritten `Library`
      * statements.
      */
-    protected async zipAndHostComponentLibraries(componentLibraries: ComponentLibraryConfiguration[], port: number) {
+    protected async zipServeAndInstallComponentLibraries(componentLibraries: ComponentLibraryConfiguration[], port: number) {
         if (!componentLibraries || componentLibraries.length === 0) {
             return;
         }
@@ -1503,14 +1502,14 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
             await this.deleteAllComponentLibraries();
         }
 
-        //seal every complib's zip in parallel — each targets distinct files
+        //zip each complib in parallel
         const packagePromises = this.projectManager.componentLibraryProjects.map(
             compLibProject => compLibProject.zipPackage({ retainStagingFolder: true })
         );
 
         //install component libraries strictly in their declared order (which must be dependency order:
         //a library may only depend on libraries declared before it). Each install is fully awaited before the
-        //next begins, and a failure aborts the launch — installing out of order, or continuing past a failed
+        //next begins, and a failure aborts the launch. Installing out of order, or continuing past a failed
         //install, leaves the device with dangling `Library` references that fail to compile.
         for (let i = 0; i < this.projectManager.componentLibraryProjects.length; i++) {
             const compLibProject = this.projectManager.componentLibraryProjects[i];

@@ -1864,7 +1864,7 @@ describe('BrightScriptDebugSession', () => {
             await session['prepareComponentLibraries'](componentLibraries);
             await session['writeAndPostfixComponentLibraries'](componentLibraries);
             await session.projectManager.applyLibraryReferencePostfixes();
-            await session['zipAndHostComponentLibraries'](componentLibraries, port);
+            await session['zipServeAndInstallComponentLibraries'](componentLibraries, port);
         }
 
         function stubDefaults() {

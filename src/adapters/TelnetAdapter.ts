@@ -56,7 +56,6 @@ export class TelnetAdapter {
     public connected: boolean;
 
     private compileErrorProcessor: CompileErrorProcessor;
-
     public requestPipeline: TelnetRequestPipeline;
     private emitter: EventEmitter;
     private isNextBreakpointSkipped = false;
