@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.23.15](https://github.com/rokucommunity/roku-debug/compare/0.23.14...v0.23.15) - 2026-07-06
+### Changed
+ - Accept device-info in the launch config to skip the device-info request ([#381](https://github.com/rokucommunity/roku-debug/pull/381))
+ - Make packageUploadOverrides route and formData optional ([#380](https://github.com/rokucommunity/roku-debug/pull/380))
+ - upgrade to [roku-deploy@3.17.7](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3177---2026-07-06). Notable changes since 3.17.6:
+     - Extract normalizeDeviceInfo helper from getDeviceInfo ([#300](https://github.com/rokucommunity/roku-deploy/pull/300))
+     - Fix: potential crash in normalizeDeviceInfoFieldValue when supplied non-string values ([#301](https://github.com/rokucommunity/roku-deploy/pull/301))
+### Fixed
+ - Prevent orphaned debug adapter after client disconnect ([#383](https://github.com/rokucommunity/roku-debug/pull/383))
+
+
+
 ## [0.23.14](https://github.com/rokucommunity/roku-debug/compare/0.23.13...v0.23.14) - 2026-06-29
 ### Added
  - Add per-component-library option to disable file postfixing ([#378](https://github.com/rokucommunity/roku-debug/pull/378))
