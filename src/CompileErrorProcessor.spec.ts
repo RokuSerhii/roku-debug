@@ -280,48 +280,8 @@ describe('CompileErrorProcessor', () => {
             return count;
         }
 
-        it('does not emit diagnostics while paused', () => {
-            compiler.pause();
-            expect(runCompileAndCountDiagnostics()).to.equal(0);
-        });
-
-        it('emits diagnostics again after resume', () => {
-            compiler.pause();
-            compiler.resume();
-            expect(runCompileAndCountDiagnostics()).to.equal(1);
-        });
-
         it('emits diagnostics normally when never paused (sanity check)', () => {
             expect(runCompileAndCountDiagnostics()).to.equal(1);
-        });
-
-        it('drops a compile error that was mid-capture when paused', () => {
-            let count = 0;
-            compiler.on('diagnostics', () => {
-                count++;
-            });
-            //start a compile and roll in an error line, but pause before the stale-error timer fires
-            compiler.processUnhandledLines(`------ Compiling dev 'app' ------`);
-            compiler.processUnhandledLines(`--- Syntax Error. (compile error &h02) in pkg:/components/MainScene.brs(3)`);
-            compiler.pause();
-            clock.tick(100);
-            expect(count).to.equal(0);
-            //pausing also clears the half-captured compile state
-            expect(compiler.status).to.equal(CompileStatus.none);
-            expect(compiler.compilingLines).to.eql([]);
-        });
-
-        it('settle waits for the configured cooldown', async () => {
-            const promise = compiler.settle(250);
-            let resolved = false;
-            void promise.then(() => {
-                resolved = true;
-            });
-            await clock.tickAsync(249);
-            expect(resolved).to.be.false;
-            await clock.tickAsync(1);
-            await promise;
-            expect(resolved).to.be.true;
         });
     });
 

@@ -3163,7 +3163,7 @@ describe('BrightScriptDebugSession', () => {
             sinon.stub(session as any, 'writeAndPostfixComponentLibraries').resolves();
             sinon.stub(session.projectManager, 'applyLibraryReferencePostfixes').resolves();
             sinon.stub(session as any, 'zipMainProject').resolves();
-            sinon.stub(session as any, 'zipAndHostComponentLibraries').resolves();
+            sinon.stub(session as any, 'zipServeAndInstallComponentLibraries').resolves();
             sinon.stub(session, 'initRendezvousTracking').resolves();
             // Prevent createRokuAdapter from replacing the mock rokuAdapter with a real adapter
             sinon.stub(session as any, 'createRokuAdapter').callsFake(() => { });
@@ -3299,7 +3299,7 @@ describe('BrightScriptDebugSession', () => {
                     order.push('zip:main');
                     return Promise.resolve();
                 });
-                sinon.stub(session as any, 'zipAndHostComponentLibraries').callsFake(() => {
+                sinon.stub(session as any, 'zipServeAndInstallComponentLibraries').callsFake(() => {
                     order.push('zip:complibs');
                     return Promise.resolve();
                 });
