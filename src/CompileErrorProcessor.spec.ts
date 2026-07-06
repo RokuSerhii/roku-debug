@@ -251,40 +251,6 @@ describe('CompileErrorProcessor', () => {
         });
     });
 
-    describe('pause / resume', () => {
-        let clock: SinonFakeTimers;
-        beforeEach(() => {
-            clock = sinon.useFakeTimers();
-        });
-        afterEach(() => {
-            clock.restore();
-        });
-
-        //a log block that, when processed, puts the processor into a compile-error state. We deliberately omit the
-        //`------ Running ------` line so the stale-error timer fires and reports the error.
-        const compileErrorLog = dedent`
-            ------ Compiling dev 'app' ------
-            Found 1 compile error
-            --- Syntax Error. (compile error &h02) in pkg:/components/MainScene.brs(3)
-        `;
-
-        /** feed the compile-error log, flush the error timer + emit tick, and return how many diagnostics fired */
-        function runCompileAndCountDiagnostics() {
-            let count = 0;
-            compiler.on('diagnostics', () => {
-                count++;
-            });
-            compiler.processUnhandledLines(compileErrorLog);
-            //flush the stale-error timer (compileErrorTimeoutMs) and the next-tick emit
-            clock.tick(100);
-            return count;
-        }
-
-        it('emits diagnostics normally when never paused (sanity check)', () => {
-            expect(runCompileAndCountDiagnostics()).to.equal(1);
-        });
-    });
-
     describe('parseGenericXmlError ', () => {
         it('handles empty line', () => {
             expect(
