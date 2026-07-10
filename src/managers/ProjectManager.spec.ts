@@ -10,9 +10,21 @@ import { Project, ComponentLibraryProject, ProjectManager, componentLibraryPostf
 import { BreakpointManager } from './BreakpointManager';
 import { SourceMapManager } from './SourceMapManager';
 import { LocationManager } from './LocationManager';
-import * as decompress from 'decompress';
+import * as JSZip from 'jszip';
 import { undent } from 'undent';
 import { forceDeleteDir } from '../testHelpers.spec';
+
+/**
+ * Extract every file from the given zip archive into the destination directory
+ */
+async function extractZip(zipFilePath: string, destinationDir: string) {
+    const zip = await JSZip.loadAsync(fsExtra.readFileSync(zipFilePath));
+    for (const entry of Object.values(zip.files)) {
+        if (!entry.dir) {
+            fsExtra.outputFileSync(path.join(destinationDir, entry.name), await entry.async('nodebuffer'));
+        }
+    }
+}
 
 let sinon = sinonActual.createSandbox();
 let n = fileUtils.standardizePath.bind(fileUtils);
@@ -1989,7 +2001,7 @@ describe('Project', () => {
                 fsExtra.readdirSync(project.outDir).find(x => x?.toLowerCase().endsWith('.zip'))
             );
 
-            await decompress(zipPath, `${tempPath}/extracted`);
+            await extractZip(zipPath, `${tempPath}/extracted`);
             expect(fsExtra.pathExistsSync(`${tempPath}/extracted/manifest`)).to.be.true;
             expect(fsExtra.pathExistsSync(`${tempPath}/extracted/source/main.brs`)).to.be.true;
             expect(fsExtra.pathExistsSync(`${tempPath}/extracted/source/main.brs.map`)).to.be.false;
@@ -2001,7 +2013,7 @@ describe('Project', () => {
             project.packagePath = s`${tempPath}/package/path.zip`;
             await project.zipPackage({ retainStagingFolder: true });
 
-            await decompress(project.packagePath, `${tempPath}/extracted`);
+            await extractZip(project.packagePath, `${tempPath}/extracted`);
             expect(fsExtra.pathExistsSync(`${tempPath}/extracted/manifest`)).to.be.true;
             expect(fsExtra.pathExistsSync(`${tempPath}/extracted/source/main.brs`)).to.be.true;
         });
