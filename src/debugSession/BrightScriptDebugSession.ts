@@ -727,13 +727,10 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
             // so if we have at least one installable complib, delete the dev app and any complibs to avoid all that.
             if (this.launchConfiguration.componentLibraries?.some(x => x.install)) {
                 this.sendLaunchProgress('update', 'Removing existing dev app and component libraries');
-                this.logger.log('Deleting any installed channel on the device to ensure a clean slate for component library installation');
-                await rokuDeploy.deleteInstalledChannel({
+                await rokuDeploy.deleteAllSideloadedPlugins({
                     host: this.launchConfiguration.host,
                     password: this.launchConfiguration.password
                 });
-                this.logger.log('Deleting any installed component libraries on the device to ensure a clean slate for component library installation');
-                await this.deleteAllComponentLibraries();
             }
 
             await this.connectRokuAdapter();
@@ -1648,12 +1645,6 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
             username: this.launchConfiguration.username || 'rokudev'
         };
 
-        const getInstalledComplibs = async () => {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            const packages = (await rokuDeploy['getInstalledPackages'](deviceOptions)) as Array<{ appType: 'channel' | 'dcl'; archiveFileName: string }>;
-            return packages.filter(x => x.appType === 'dcl');
-        };
-
         //The user's configured complibs, in REVERSE declaration order (dependents before their dependencies). A
         //complib's position here is its delete priority; complibs the user didn't configure aren't in this list.
         const deletePriority = this.projectManager.componentLibraryProjects
@@ -1672,7 +1663,7 @@ export class BrightScriptDebugSession extends LoggingDebugSession {
 
         while (true) {
             //re-fetch the installed complibs after each iteration: deleting one complib can cascade-delete others, so never delete a stale entry
-            const installed = await getInstalledComplibs();
+            const installed = (await rokuDeploy.listSideloadedPlugins(deviceOptions)).filter(x => x.appType === 'dcl');
 
             const attemptCount = (complib: { archiveFileName: string }) => attempts.get(complib.archiveFileName) ?? 0;
 
