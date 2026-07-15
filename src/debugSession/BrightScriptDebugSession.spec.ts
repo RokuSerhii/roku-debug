@@ -1872,7 +1872,7 @@ describe('BrightScriptDebugSession', () => {
 
         function stubDefaults() {
             //deletion now reads the installed list and deletes each one directly; default to a device with nothing installed
-            sinon.stub(rokuDeploy as any, 'getInstalledPackages').resolves([]);
+            sinon.stub(rokuDeploy, 'listSideloadedPlugins').resolves([]);
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').resolves(null);
             session['rokuAdapter'] = <any>{};
             sinon.stub(session['componentLibraryServer'], 'startStaticFileHosting').resolves();
@@ -1957,7 +1957,7 @@ describe('BrightScriptDebugSession', () => {
         });
 
         it('waits for stage and zip before installing (slow lib1, fast lib2)', async () => {
-            sinon.stub(rokuDeploy as any, 'getInstalledPackages').resolves([]);
+            sinon.stub(rokuDeploy, 'listSideloadedPlugins').resolves([]);
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').resolves(null);
             session['rokuAdapter'] = <any>{};
             sinon.stub(session['componentLibraryServer'], 'startStaticFileHosting').resolves();
@@ -1997,7 +1997,7 @@ describe('BrightScriptDebugSession', () => {
         });
 
         it('fails build when complib promise fails', async () => {
-            sinon.stub(rokuDeploy as any, 'getInstalledPackages').resolves([]);
+            sinon.stub(rokuDeploy, 'listSideloadedPlugins').resolves([]);
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').resolves(null);
             session['rokuAdapter'] = <any>{};
             sinon.stub(session['componentLibraryServer'], 'startStaticFileHosting').resolves();
@@ -2021,7 +2021,7 @@ describe('BrightScriptDebugSession', () => {
         });
 
         it('skips deleting complibs when none are marked install=true', async () => {
-            const getInstalledStub = sinon.stub(rokuDeploy as any, 'getInstalledPackages').resolves([]);
+            const getInstalledStub = sinon.stub(rokuDeploy, 'listSideloadedPlugins').resolves([]);
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').resolves(null);
             sinon.stub(session['componentLibraryServer'], 'startStaticFileHosting').resolves();
             sinon.stub(ComponentLibraryProject.prototype, 'stage').resolves();
@@ -2135,8 +2135,8 @@ describe('BrightScriptDebugSession', () => {
             //deletion pauses/resumes compile-error reporting on the adapter; stub those so the flow works without a device
             session['rokuAdapter'] = <any>{};
 
-            sinon.stub(rokuDeploy as any, 'getInstalledPackages').callsFake(() => Promise.resolve(
-                [...present].map(archiveFileName => ({ appType: 'dcl', archiveFileName }))
+            sinon.stub(rokuDeploy, 'listSideloadedPlugins').callsFake(() => Promise.resolve(
+                [...present].map(archiveFileName => ({ appType: 'dcl', archiveFileName } as any))
             ));
 
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').callsFake((deleteOptions: any) => {
@@ -2280,7 +2280,7 @@ describe('BrightScriptDebugSession', () => {
         it('re-throws a non-compile error (e.g. auth/network failure) immediately', async () => {
             configureComplibs(['LibAlpha.zip']);
             session['launchConfiguration'].host = '192.168.1.100';
-            sinon.stub(rokuDeploy as any, 'getInstalledPackages').resolves([{ appType: 'dcl', archiveFileName: 'LibAlpha.zip' }]);
+            sinon.stub(rokuDeploy, 'listSideloadedPlugins').resolves([{ appType: 'dcl', archiveFileName: 'LibAlpha.zip' } as any]);
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').rejects(new Error('Unauthorized. Please verify credentials'));
 
             await expectThrowsAsync(() => session['deleteAllComponentLibraries']());
@@ -2290,7 +2290,7 @@ describe('BrightScriptDebugSession', () => {
             this.timeout(5000);
             configureComplibs([]);
             //a complib that always fails with a compile error and is never unblocked - should give up and throw
-            sinon.stub(rokuDeploy as any, 'getInstalledPackages').resolves([{ appType: 'dcl', archiveFileName: 'stuck.zip' }]);
+            sinon.stub(rokuDeploy, 'listSideloadedPlugins').resolves([{ appType: 'dcl', archiveFileName: 'stuck.zip' } as any]);
             session['launchConfiguration'].host = '192.168.1.100';
             sinon.stub(rokuDeploy, 'deleteComponentLibrary').rejects(new Error('Install Failure: Compilation Failed. (compile error &hb9)'));
 
